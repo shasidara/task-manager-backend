@@ -6,12 +6,13 @@ const taskRouter = express.Router();
 
 taskRouter.post("/task", userAuth, async (req: Request, res: Response) => {
     try{
-        const { title, description, status } = req.body;
+        const { title, description, status, targetDate } = req.body;
 
         const task = new Task({
             title,
             description,
             status,
+            targetDate: targetDate || null,
         });
 
         const data = await task.save();
@@ -29,6 +30,7 @@ taskRouter.post("/task", userAuth, async (req: Request, res: Response) => {
 taskRouter.get("/all/tasks", async (req: Request, res: Response) => {
     try {
         const search = req.query.search as string;
+        const sort = req.query.sort as string;
 
         const query = search ? {
             $or: [
@@ -36,8 +38,10 @@ taskRouter.get("/all/tasks", async (req: Request, res: Response) => {
                 {description: {$regex: search, $options: "i"}},
             ],
         } : {};
+
+        const sortOrder = sort === "oldest" ? 1 : -1;
         
-        const tasks = await Task.find(query).sort({ createdAt: -1 });
+        const tasks = await Task.find(query).sort({ createdAt: sortOrder });
 
         res.json({ message: "Task fetched successfully",
             data: tasks
