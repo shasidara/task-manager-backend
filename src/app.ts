@@ -11,7 +11,10 @@ import profileRouter from "./routers/profile";
 const app = express();
 
 app.use(cors({
-    origin: "https://task-manager-web-sable.vercel.app",
+    origin: [
+        "https://task-manager-web-sable.vercel.app", 
+        "http://localhost:5173",
+    ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
