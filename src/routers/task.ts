@@ -1,33 +1,45 @@
 import express, { Request, Response} from "express";
 import Task from "../models/taskSchema";
 import userAuth from "../middleware/auth";
+import { upload } from "../config/cloudinary";
 
 const taskRouter = express.Router();
 
-taskRouter.post("/task", userAuth, async (req: Request, res: Response) => {
+taskRouter.post("/task", userAuth, upload.array("attachments", 10), async (req: Request, res: Response) => {
     try{
-        const { title, description, status, targetDate } = req.body;
+        const { title, description, status, targetDate, priority, labels } = req.body;
+
+        const files = req.files as Express.Multer.File[];
+        const attachments = files?.map((file: any) => ({
+            url: file.path,
+            originalName: file.originalname,
+            resourceType: file.resource_type || "auto",
+        })) || [];
+
+        const parsedLabels = labels ? typeof labels === "string" ? JSON.parse(labels) : labels : [];
 
         const task = new Task({
             title,
             description,
             status,
-            targetDate: targetDate || null,
+            targetDate,
+            priority: priority || "medium",
+            labels: parsedLabels,
+            attachments,
         });
 
         const data = await task.save();
-
         res.json({message: "task saved successfully", data})
-    }catch(err) {
-        if(err instanceof Error) {
-            res.status(400).send("ERROR: " + err.message)
-        } else{
-            res.status(400).send("Unknown error");
-        };
+    }catch(err: any) {
+        console.error("ERROR NAME:", err?.name);
+        console.error("ERROR MESSAGE:", err?.message);
+        console.error("ERROR HTTP CODE:", err?.http_code);
+        console.error("FULL ERROR:", JSON.stringify(err));
+        res.status(500).json({ message: err?.message || "Internal server error" });
     };
 });
 
-taskRouter.get("/all/tasks", async (req: Request, res: Response) => {
+taskRouter.get("/all/tasks", userAuth, async (req: Request, res: Response) => {
     try {
         const search = req.query.search as string;
         const sort = req.query.sort as string;
@@ -53,7 +65,7 @@ taskRouter.get("/all/tasks", async (req: Request, res: Response) => {
     };
 });
 
-taskRouter.get("/single/task/:_id", async (req: Request, res: Response) => {
+taskRouter.get("/single/task/:_id", userAuth, async (req: Request, res: Response) => {
     try {
         const task = await Task.findById(req.params._id);
         if(!task) {
@@ -70,21 +82,41 @@ taskRouter.get("/single/task/:_id", async (req: Request, res: Response) => {
     };
 });
 
-taskRouter.put("/update/task/:id", async (req: Request, res: Response) => {
+taskRouter.put("/update/task/:id",userAuth, upload.array("attachments", 10), async (req: Request, res: Response) => {
     try {
-        const { title, description, status } = req.body;
+        const { title, description, status, targetDate, priority, labels } = req.body;
 
         if(!title) {
             res.status(400).json({ message: "Title is required "});
             return;
         };
 
+        const files = req.files as Express.Multer.File[];
+        const newAttachments = files?.map((file: any) => ({
+            url: file.path,
+            originalName: file.originalname,
+            resourseType: file.resource_type || "auto",
+        })) || [];
+
+        const parsedLabels = labels ? typeof labels === "string" ? JSON.parse(labels) : labels : [];
+        const existingTask = await Task.findById(req.params.id);
+        if(!existingTask) {
+            return res.status(404).json({ message: "Task not found" });
+        }
+
         const updateTask = await Task.findByIdAndUpdate(
             req.params.id,
-            { title, description, status },
+            { 
+                title, 
+                description, 
+                status,
+                targetDate,
+                priority,
+                labels: parsedLabels,
+                attachments: [...(existingTask.attachments || []), ...newAttachments],
+            },
             { new: true, runValidators: true }
         );
-
         if(!updateTask){
             res.status(400).json("Task not found!");
             return;
@@ -94,7 +126,6 @@ taskRouter.put("/update/task/:id", async (req: Request, res: Response) => {
             message: "Task updated successfully",
             data: updateTask,
         });
-
     }catch (err) {
         if(err instanceof Error){
             res.status(500).json({ message: err.message});
@@ -102,10 +133,9 @@ taskRouter.put("/update/task/:id", async (req: Request, res: Response) => {
     };
 });
 
-taskRouter.delete("/delete/task/:id", async (req: Request, res: Response) => {
+taskRouter.delete("/delete/task/:id", userAuth, async (req: Request, res: Response) => {
     try{
         const deletedTask = await Task.findByIdAndDelete(req.params.id);
-
         if(!deletedTask){
             res.status(404).json({ message: "Task not found!"});
         };
@@ -114,7 +144,6 @@ taskRouter.delete("/delete/task/:id", async (req: Request, res: Response) => {
             message: "Task deleted successfully",
             data: deletedTask,
         });
-
     }catch(err) {
         if(err instanceof Error) {
             res.status(500).json({ message: err.message});
