@@ -232,6 +232,3 @@ updatedAt     Date     (auto)
 
 ## 👨‍💻 Developer
 Shasidara C — Full Stack Developer
-
-
-Shasidara C — Full Stack Developer
