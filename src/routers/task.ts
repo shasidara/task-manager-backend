@@ -31,10 +31,6 @@ taskRouter.post("/task", userAuth, upload.array("attachments", 10), async (req: 
         const data = await task.save();
         res.json({message: "task saved successfully", data})
     }catch(err: any) {
-        console.error("ERROR NAME:", err?.name);
-        console.error("ERROR MESSAGE:", err?.message);
-        console.error("ERROR HTTP CODE:", err?.http_code);
-        console.error("FULL ERROR:", JSON.stringify(err));
         res.status(500).json({ message: err?.message || "Internal server error" });
     };
 });
@@ -84,7 +80,7 @@ taskRouter.get("/single/task/:_id", userAuth, async (req: Request, res: Response
 
 taskRouter.put("/update/task/:id",userAuth, upload.array("attachments", 10), async (req: Request, res: Response) => {
     try {
-        const { title, description, status, targetDate, priority, labels } = req.body;
+        const { title, description, status, targetDate, priority, labels, deletedAttachments } = req.body;
 
         if(!title) {
             res.status(400).json({ message: "Title is required "});
@@ -99,10 +95,15 @@ taskRouter.put("/update/task/:id",userAuth, upload.array("attachments", 10), asy
         })) || [];
 
         const parsedLabels = labels ? typeof labels === "string" ? JSON.parse(labels) : labels : [];
+        const parsedDeletedAttachments: string[] = deletedAttachments ? typeof deletedAttachments === "string" ? JSON.parse(deletedAttachments) : deletedAttachments : [];
         const existingTask = await Task.findById(req.params.id);
         if(!existingTask) {
             return res.status(404).json({ message: "Task not found" });
         }
+
+        const filteredAttachments = (existingTask.attachments || []).filter(
+            (att) => !parsedDeletedAttachments.includes(att.url)
+        );
 
         const updateTask = await Task.findByIdAndUpdate(
             req.params.id,
@@ -113,7 +114,7 @@ taskRouter.put("/update/task/:id",userAuth, upload.array("attachments", 10), asy
                 targetDate,
                 priority,
                 labels: parsedLabels,
-                attachments: [...(existingTask.attachments || []), ...newAttachments],
+                attachments: [...filteredAttachments, ...newAttachments],
             },
             { new: true, runValidators: true }
         );
